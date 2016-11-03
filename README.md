@@ -14,7 +14,7 @@ To load the ruby interpreter in burp, go to Extender->Options, and in the Ruby E
 
 ## Install
 
-### Burp Pro
+### Normal use
 
 Extender > BApp Store and activate the Dradis Framework Connector.
 
