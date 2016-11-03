@@ -79,7 +79,7 @@ class BurpExtender
     when IContextMenuInvocation::CONTEXT_SCANNER_RESULTS, IContextMenuInvocation::CONTEXT_INTRUDER_PAYLOAD_POSITIONS
       dradis_menu = JMenuItem.new('Send to Dradis', nil)
 
-      dradis_menu.add_action_listener { send_to_dradis(invocation) }
+      dradis_menu.add_action_listener { send_to_dradis_menu_handler(invocation) }
       menu << dradis_menu
     end
 
@@ -159,33 +159,45 @@ class BurpExtender
     panel
   end
 
-  # Internal: use Burp's facilities to store extension settings.
+
+  # Internal: this method creates a Hash we can use in the HTTP POST request to
+  # create a Dradis Issue from an instance of Burp's IScanIssue.
   #
-  # Returns nothing.
-  def save_settings
-    @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
-    @callbacks.save_extension_setting 'token', @field_token.text
-    @stdout.println 'Configuration saved.'
+  # issue - The IScanIssue object from Burp.
+  #
+  # Returns a String containing the JSON format Dradis' API is expecting.
+  #
+  def build_json_payload(issue)
+    template = "#[Title]#\n%issue.name%\n\n\n"
+    template << "#[Confidence]#\n%issue.confidence%\n\n\n"
+    template << "#[Severity]#\n%issue.severity%\n\n\n"
+    template << "#[Background]#\n%issue.background%\n\n\n"
+    template << "#[RemediationBackground]#\n%issue.remediation_background%\n\n\n"
+    template << "#[Detail]#\n%issue.detail%\n\n\n"
+    template << "#[RemediationDetails]#\n%issue.remediation_detail%\n\n\n"
+
+    issue_text = template
+    issue_text.sub!(/%issue\.name%/, issue.issue_name)
+    issue_text.sub!(/%issue\.confidence%/, issue.confidence)
+    issue_text.sub!(/%issue\.severity%/, issue.severity)
+    issue_text.sub!(/%issue\.background%/, issue.issue_background)
+    issue_text.sub!(/%issue\.remediation_background%/, issue.remediation_background)
+    issue_text.sub!(/%issue\.detail%/, issue.issue_detail)
+    issue_text.sub!(/%issue\.remediation_detail%/, issue.remediation_detail)
+
+    { issue: { text: issue_text } }.to_json
   end
 
   # Internal: get an Issue and send it to Dradis using the HTTP API.
   #
-  # invocation - The IContextMenuInvocation we're receiving from Burp's menu
-  #              item click.
+  # issue - The IScanIssue we're receiving from Burp's menu item click.
   #
   # Returns nothing.
   #
-  def send_to_dradis(invocation)
-
+  def create_dradis_issue(issue)
     endpoint = @field_endpoint.text
-
-    payload = {
-      issue: {
-        text: 'Lorem ipsum Burp...'
-      }
-    }.to_json
-
-    token = @field_token.text
+    token    = @field_token.text
+    payload  = build_json_payload(issue)
 
     begin
       uri      = URI.parse(endpoint)
@@ -203,6 +215,45 @@ class BurpExtender
     rescue Exception => e
       @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}")
       @stderr.println e.backtrace
+    end
+  end
+
+  # Internal: use Burp's facilities to store extension settings.
+  #
+  # Returns nothing.
+  def save_settings
+    @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
+    @callbacks.save_extension_setting 'token', @field_token.text
+    @stdout.println 'Configuration saved.'
+  end
+
+  # Internal: context menu handler that gets a list of selected issues in the
+  # Scanner window and sends them to Dradis via #create_dradis_issue.
+  #
+  # invocation - The IContextMenuInvocation we're receiving from Burp's menu
+  #              item click.
+  #
+  # Returns nothing.
+  #
+  def send_to_dradis_menu_handler(invocation)
+
+    if invocation.invocation_context == IContextMenuInvocation::CONTEXT_SCANNER_RESULTS
+      invocation.selected_issues.each do |issue|
+        create_dradis_issue(issue)
+      end
+    else
+      issue = Struct.new(:issue_name, :confidence, :severity,
+      :issue_background, :remediation_background, :issue_detail,
+      :remediation_detail).new(
+        'My test Issue',
+        'High',
+        'Low',
+        'n/a/b',
+        'n/a/rb',
+        'n/a/d',
+        'n/a/rd'
+      )
+      create_dradis_issue(issue)
     end
   end
 
