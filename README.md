@@ -9,8 +9,7 @@ This extension is written in Ruby, you will need a JRuby Complete package from h
 
 To load the ruby interpreter in burp, go to Extender->Options, and in the Ruby Environment section set the PATH of the jruby-complete.jar file.
 
-!(https://camo.githubusercontent.com/afc119e6cff722337e576629f8ee2a4e399f9686/68747470733a2f2f7261772e6769746875622e636f6d2f77696b692f696e666f627974652f666172616461792f696d616765732f627572705f727562795f706174682e706e67)
-
+![Burp > Options > Ruby Environment](https://camo.githubusercontent.com/afc119e6cff722337e576629f8ee2a4e399f9686/68747470733a2f2f7261772e6769746875622e636f6d2f77696b692f696e666f627974652f666172616461792f696d616765732f627572705f727562795f706174682e706e67)
 
 
 ## Install
