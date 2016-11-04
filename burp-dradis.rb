@@ -26,9 +26,26 @@ require 'json'
 require 'net/http'
 require 'uri'
 
+java_import 'java.awt.BorderLayout'
+java_import 'java.awt.Color'
+java_import 'java.awt.Desktop'
+java_import 'java.awt.GridBagConstraints'
+java_import 'java.awt.GridBagLayout'
+java_import 'java.awt.Toolkit'
+java_import 'java.awt.datatransfer.StringSelection'
+java_import 'javax.swing.BorderFactory'
+java_import 'javax.swing.Box'
+java_import 'javax.swing.ButtonGroup'
 java_import 'javax.swing.GroupLayout'
+java_import 'javax.swing.JEditorPane'
 java_import 'javax.swing.JMenuItem'
+java_import 'javax.swing.JOptionPane'
 java_import 'javax.swing.JPanel'
+java_import 'javax.swing.JRadioButton'
+java_import 'javax.swing.JSeparator'
+java_import 'javax.swing.SwingConstants'
+java_import 'javax.swing.event.HyperlinkEvent'
+java_import 'javax.swing.event.HyperlinkListener'
 
 java_import 'burp.IBurpExtender'
 java_import 'burp.IExtensionHelpers'
@@ -38,7 +55,7 @@ java_import 'burp.ITab'
 
 
 class BurpExtender
-  include IBurpExtender, IContextMenuFactory, ITab
+  include HyperlinkListener, IBurpExtender, IContextMenuFactory, ITab
 
   VERSION = '0.0.1'
 
@@ -108,55 +125,228 @@ class BurpExtender
   #
   def build_config_panel
     panel        = javax.swing.JPanel.new
-    layout       = javax.swing.GroupLayout.new(panel)
+    layout       = java.awt.GridBagLayout.new
+    constraints  = java.awt.GridBagConstraints.new
+
     panel.setLayout(layout)
+    panel.setBorder( BorderFactory.createEtchedBorder() )
 
-    layout.setAutoCreateGaps(true)
-    layout.setAutoCreateContainerGaps(true)
+    label_title            = javax.swing.JLabel.new('<html><h3>Dradis Framework connector configuration</h3></html>')
+    label_title.foreground = java.awt.Color.new(209,122,33)
 
+    label_description = javax.swing.JLabel.new('Use this connector to send Burp Scanner issues to your Dradis Framework instance.')
+
+    label_edition = javax.swing.JLabel.new('Edition:')
+
+    @radio_ce = javax.swing.JRadioButton.new('')
+    @radio_ce.addActionListener { toggle_edition() }
+    @radio_ce.selected = true
+
+    @radio_pro = javax.swing.JRadioButton.new('')
+    @radio_pro.addActionListener { toggle_edition() }
+
+    @edition_group = javax.swing.ButtonGroup.new()
+    @edition_group.add(@radio_ce)
+    @edition_group.add(@radio_pro)
+
+    editor_ce            = javax.swing.JEditorPane.new(
+                             'text/html',
+                             '<a href="http://dradisframework.org/?utm_source=burp&utm_medium=extension&utm_campaign=configuration">Dradis Community</a>'
+                           )
+    editor_ce.editable   = false
+    editor_ce.opaque     = false
+    editor_ce.background = java.awt.Color.new(0,0,0,0)
+    editor_ce.addHyperlinkListener(self)
+
+    editor_pro            = javax.swing.JEditorPane.new(
+                              'text/html',
+                              '<a href="http://securityroots.com/dradispro/editions.html??utm_source=burp&utm_medium=extension&utm_campaign=configuration">Dradis Professional</a>'
+                            )
+    editor_pro.editable   = false
+    editor_pro.opaque     = false
+    editor_pro.background = java.awt.Color.new(0,0,0,0)
+    editor_pro.addHyperlinkListener(self)
 
     @field_endpoint = javax.swing.JTextField.new()
-    label_endpoint  = javax.swing.JLabel.new('Dradis URL')
+    label_endpoint  = javax.swing.JLabel.new('Dradis URL:')
     label_endpoint.setLabelFor(@field_endpoint)
 
-
     @field_token = javax.swing.JTextField.new()
-    label_token  = javax.swing.JLabel.new('API token')
+    label_token  = javax.swing.JLabel.new('API token:')
     label_token.setLabelFor(@field_token)
+
+    @field_project_id = javax.swing.JTextField.new()
+    @field_project_id.enabled = false
+
+    @label_project_id = javax.swing.JLabel.new('Project ID:')
+    @label_project_id.setLabelFor(@field_project_id)
+    @label_project_id.enabled = false
 
     button_save = javax.swing.JButton.new('Save')
     button_save.add_action_listener { save_settings }
 
+    vertical_glue = Box.createVerticalGlue()
 
-    layout.setHorizontalGroup(
-      layout.createSequentialGroup()
-        .addGroup(layout.createParallelGroup()
-          .addComponent(label_endpoint)
-          .addComponent(label_token)
-        )
-        .addGroup(layout.createParallelGroup()
-          .addComponent(@field_endpoint)
-          .addComponent(@field_token)
-          .addComponent(button_save)
-        )
-    )
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 0
+    constraints.gridy      = 0
+    constraints.gridwidth  = 6
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,0,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(label_title, constraints)
 
-    layout.setVerticalGroup(
-      layout.createSequentialGroup()
-        .addGroup(layout.createParallelGroup()
-          .addComponent(label_endpoint)
-          .addComponent(@field_endpoint)
-        )
-        .addGroup(layout.createParallelGroup()
-          .addComponent(label_token)
-          .addComponent(@field_token)
-        )
-        .addGroup(layout.createParallelGroup()
-          .addComponent(button_save)
-        )
-    )
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 0
+    constraints.gridy      = 1
+    constraints.gridwidth  = 6
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(0,10,10,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(label_description, constraints)
 
-    panel
+    constraints.anchor     = java.awt.GridBagConstraints::EAST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 0
+    constraints.gridy      = 2
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(label_edition, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 2
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,0)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@radio_ce, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::WEST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 2
+    constraints.gridy      = 2
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,0,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(editor_ce, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 3
+    constraints.gridy      = 2
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,0)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@radio_pro, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::WEST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 4
+    constraints.gridy      = 2
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,0,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(editor_pro, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::EAST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 0
+    constraints.gridy      = 3
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(label_endpoint, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 3
+    constraints.gridwidth  = 4
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 1
+    constraints.weighty    = 0
+    panel.add(@field_endpoint, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::EAST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 0
+    constraints.gridy      = 4
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(label_token, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 4
+    constraints.gridwidth  = 4
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@field_token, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::EAST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 0
+    constraints.gridy      = 5
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@label_project_id, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 5
+    constraints.gridwidth  = 4
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@field_project_id, constraints)
+
+    constraints.anchor  = java.awt.GridBagConstraints::WEST
+    constraints.fill    = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx   = 1
+    constraints.gridy   = 6
+    constraints.insets  = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx = 0
+    constraints.weighty = 0
+    panel.add(button_save, constraints)
+
+
+    # Now we put the panel on a BorderLayout and add some vertical glue under
+    # it so it remains at the top of the tab.
+    container = javax.swing.JPanel.new
+    container.setLayout(java.awt.BorderLayout.new(5,5))
+    container.add(panel, java.awt.BorderLayout::PAGE_START)
+    container.add(vertical_glue, java.awt.BorderLayout::LINE_END)
+    container
   end
 
 
@@ -204,8 +394,15 @@ class BurpExtender
       http     = Net::HTTP.new(uri.host, uri.port)
       request  = Net::HTTP::Post.new('/api/issues')
 
-      request['Content-Type'] = 'application/json'
-      request.basic_auth('BurpExtender', token)
+      request['Content-Type']      = 'application/json'
+
+      if @radio_pro.selected
+        request['Authorization']     = "Token token=\"#{token}\""
+        request['Dradis-Project-Id'] = @field_project_id.text
+      else
+        request.basic_auth('BurpExtender', token)
+      end
+
       request.body = payload
 
 
@@ -218,11 +415,40 @@ class BurpExtender
     end
   end
 
+  # Internal: implementation of the HyperlinkListener interface that detects
+  # clicks on UI components that have an HTML link and opens them in a browser.
+  #
+  # event - The HyperlinkEvent passed by Swing.
+  #
+  # Returns nothing.
+  #
+  def hyperlinkUpdate(event)
+    url = event.getURL().toURI()
+
+    return unless event.event_type == HyperlinkEvent::EventType::ACTIVATED
+
+    # Launching a browser may not be supported in all platforms.
+    if java.awt.Desktop.isDesktopSupported()
+      desktop = java.awt.Desktop.getDesktop()
+      desktop.browse(url)
+    else
+      # Copy URL to clipboard...
+      contents  = java.awt.datatransfer.StringSelection.new(url.toString())
+      clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+      clipboard.setContents(contents, nil)
+
+      # ...and notify the user.
+      javax.swing.JOptionPane.showMessageDialog(nil, "Couldn't launch browser so we've copied the URL to your clipboard!")
+    end
+  end
+
   # Internal: use Burp's facilities to store extension settings.
   #
   # Returns nothing.
   def save_settings
+    @callbacks.save_extension_setting 'edition', @radio_ce.selected ? 'ce' : 'pro'
     @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
+    @callbacks.save_extension_setting 'project_id', @field_project_id.text
     @callbacks.save_extension_setting 'token', @field_token.text
     @stdout.println 'Configuration saved.'
   end
@@ -261,9 +487,28 @@ class BurpExtender
   #
   # Returns nothing.
   def restore_settings
-    @field_endpoint.text = @callbacks.load_extension_setting('endpoint')
-    @field_token.text    = @callbacks.load_extension_setting('token')
+    edition                = @callbacks.load_extension_setting('edition')
+    @field_endpoint.text   = @callbacks.load_extension_setting('endpoint')
+    @field_project_id.text = @callbacks.load_extension_setting('project_id')
+    @field_token.text      = @callbacks.load_extension_setting('token')
+
+    edition == 'ce' ? @radio_ce.selected = true : @radio_pro.selected = true
+    toggle_edition()
+
     @stdout.println 'Configuration restored.'
   end
 
+  # Internal: when the user select the Dradis edition they want to work with
+  # some of the config fields may need to be enabled/disabled.
+  #
+  # Returns nothing.
+  def toggle_edition()
+    if @radio_ce.selected
+      @label_project_id.enabled = false
+      @field_project_id.enabled = false
+    else
+      @label_project_id.enabled = true
+      @field_project_id.enabled = true
+    end
+  end
 end
