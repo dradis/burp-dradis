@@ -100,8 +100,6 @@ class BurpExtender
       menu << dradis_menu
     end
 
-    @stdout.println( "menu: #{invocation.invocation_context} | #{IContextMenuInvocation::CONTEXT_SCANNER_RESULTS}")
-
     menu
   end
   # ------------------------------------------------------ /IContextMenuFactory
@@ -181,6 +179,14 @@ class BurpExtender
     @label_project_id = javax.swing.JLabel.new('Project ID:')
     @label_project_id.setLabelFor(@field_project_id)
     @label_project_id.enabled = false
+
+    @field_path = javax.swing.JTextField.new()
+    @field_path.enabled = false
+    @field_path.text = '/pro'
+
+    @label_path = javax.swing.JLabel.new('Path')
+    @label_path.setLabelFor(@field_path)
+    @label_path.enabled = false
 
     button_save = javax.swing.JButton.new('Save')
     button_save.add_action_listener { save_settings }
@@ -330,10 +336,32 @@ class BurpExtender
     constraints.weighty    = 0
     panel.add(@field_project_id, constraints)
 
+    constraints.anchor     = java.awt.GridBagConstraints::EAST
+    constraints.fill       = java.awt.GridBagConstraints::VERTICAL
+    constraints.gridx      = 0
+    constraints.gridy      = 6
+    constraints.gridwidth  = 1
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@label_path, constraints)
+
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 6
+    constraints.gridwidth  = 4
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@field_path, constraints)
+
     constraints.anchor  = java.awt.GridBagConstraints::WEST
     constraints.fill    = java.awt.GridBagConstraints::VERTICAL
     constraints.gridx   = 1
-    constraints.gridy   = 6
+    constraints.gridy   = 7
     constraints.insets  = java.awt.Insets.new(5,10,5,5)
     constraints.weightx = 0
     constraints.weighty = 0
@@ -389,10 +417,14 @@ class BurpExtender
     token    = @field_token.text
     payload  = build_json_payload(issue)
 
+    path = ''
+    path << @field_path.text if @radio_pro.selected
+    path << '/api/issues'
+
     begin
       uri      = URI.parse(endpoint)
       http     = Net::HTTP.new(uri.host, uri.port)
-      request  = Net::HTTP::Post.new('/api/issues')
+      request  = Net::HTTP::Post.new(path)
 
       request['Content-Type']      = 'application/json'
 
@@ -448,6 +480,7 @@ class BurpExtender
   def save_settings
     @callbacks.save_extension_setting 'edition', @radio_ce.selected ? 'ce' : 'pro'
     @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
+    @callbacks.save_extension_setting 'path', @field_path.text
     @callbacks.save_extension_setting 'project_id', @field_project_id.text
     @callbacks.save_extension_setting 'token', @field_token.text
     @stdout.println 'Configuration saved.'
@@ -489,6 +522,7 @@ class BurpExtender
   def restore_settings
     edition                = @callbacks.load_extension_setting('edition')
     @field_endpoint.text   = @callbacks.load_extension_setting('endpoint')
+    @field_path.text       = @callbacks.load_extension_setting('path')
     @field_project_id.text = @callbacks.load_extension_setting('project_id')
     @field_token.text      = @callbacks.load_extension_setting('token')
 
@@ -506,9 +540,13 @@ class BurpExtender
     if @radio_ce.selected
       @label_project_id.enabled = false
       @field_project_id.enabled = false
+      @label_path.enabled       = false
+      @field_path.enabled       = false
     else
       @label_project_id.enabled = true
       @field_project_id.enabled = true
+      @label_path.enabled       = true
+      @field_path.enabled       = true
     end
   end
 end
