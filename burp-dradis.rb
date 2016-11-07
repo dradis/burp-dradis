@@ -24,6 +24,7 @@
 require 'java'
 require 'json'
 require 'net/http'
+require 'openssl'
 require 'uri'
 
 java_import 'java.awt.BorderLayout'
@@ -37,6 +38,7 @@ java_import 'javax.swing.BorderFactory'
 java_import 'javax.swing.Box'
 java_import 'javax.swing.ButtonGroup'
 java_import 'javax.swing.GroupLayout'
+java_import 'javax.swing.JCheckBox'
 java_import 'javax.swing.JEditorPane'
 java_import 'javax.swing.JMenuItem'
 java_import 'javax.swing.JOptionPane'
@@ -60,18 +62,16 @@ class BurpExtender
   module META
     NAME        = 'Dradis Framework connector'
     TAB_CAPTION = 'Dradis Framework'
-    VERSION     = '0.0.1'
+    VERSION     = '0.0.2'
   end
 
 
   # ------------------------------------------------------------- IBurpExtender
   def registerExtenderCallbacks(callbacks)
-    name_with_version = "#{META::NAME} (v#{META::VERSION})"
-
     @callbacks = callbacks
 
     # set our extension name
-    callbacks.setExtensionName(name_with_version)
+    callbacks.setExtensionName(META::NAME)
 
     # obtain a reference to the helpers
     @helpers = callbacks.getHelpers()
@@ -80,7 +80,7 @@ class BurpExtender
     @stdout = java.io.PrintWriter.new(callbacks.getStdout(), true)
     @stderr = java.io.PrintWriter.new(callbacks.getStderr(), true)
 
-    @stdout.println "Loading #{name_with_version}..."
+    @stdout.println "Loading #{META::NAME} (v#{META::VERSION})..."
 
     # Register a factory for custom context menu items
     callbacks.registerContextMenuFactory(self)
@@ -164,7 +164,7 @@ class BurpExtender
 
     editor_pro            = javax.swing.JEditorPane.new(
                               'text/html',
-                              '<a href="http://securityroots.com/dradispro/editions.html??utm_source=burp&utm_medium=extension&utm_campaign=configuration">Dradis Professional</a>'
+                              '<a href="http://securityroots.com/dradispro/editions.html?utm_source=burp&utm_medium=extension&utm_campaign=configuration">Dradis Professional</a>'
                             )
     editor_pro.editable   = false
     editor_pro.opaque     = false
@@ -179,6 +179,8 @@ class BurpExtender
     label_token  = javax.swing.JLabel.new('API token:')
     label_token.setLabelFor(@field_token)
 
+    @check_ignore_ssl_errors = javax.swing.JCheckBox.new('Ignore SSL certificate errors.')
+
     @field_project_id = javax.swing.JTextField.new()
     @field_project_id.enabled = false
 
@@ -190,7 +192,7 @@ class BurpExtender
     @field_path.enabled = false
     @field_path.text = '/pro'
 
-    @label_path = javax.swing.JLabel.new('Path')
+    @label_path = javax.swing.JLabel.new('Path:')
     @label_path.setLabelFor(@field_path)
     @label_path.enabled = false
 
@@ -320,10 +322,22 @@ class BurpExtender
     constraints.weighty    = 0
     panel.add(@field_token, constraints)
 
+    constraints.anchor     = java.awt.GridBagConstraints::NORTH
+    constraints.fill       = java.awt.GridBagConstraints::BOTH
+    constraints.gridx      = 1
+    constraints.gridy      = 5
+    constraints.gridwidth  = 4
+    constraints.gridheight = 1
+    constraints.insets     = java.awt.Insets.new(5,10,5,5)
+    constraints.weightx    = 0
+    constraints.weighty    = 0
+    panel.add(@check_ignore_ssl_errors, constraints)
+
+
     constraints.anchor     = java.awt.GridBagConstraints::EAST
     constraints.fill       = java.awt.GridBagConstraints::VERTICAL
     constraints.gridx      = 0
-    constraints.gridy      = 5
+    constraints.gridy      = 6
     constraints.gridwidth  = 1
     constraints.gridheight = 1
     constraints.insets     = java.awt.Insets.new(5,10,5,5)
@@ -334,7 +348,7 @@ class BurpExtender
     constraints.anchor     = java.awt.GridBagConstraints::NORTH
     constraints.fill       = java.awt.GridBagConstraints::BOTH
     constraints.gridx      = 1
-    constraints.gridy      = 5
+    constraints.gridy      = 6
     constraints.gridwidth  = 4
     constraints.gridheight = 1
     constraints.insets     = java.awt.Insets.new(5,10,5,5)
@@ -345,7 +359,7 @@ class BurpExtender
     constraints.anchor     = java.awt.GridBagConstraints::EAST
     constraints.fill       = java.awt.GridBagConstraints::VERTICAL
     constraints.gridx      = 0
-    constraints.gridy      = 6
+    constraints.gridy      = 7
     constraints.gridwidth  = 1
     constraints.gridheight = 1
     constraints.insets     = java.awt.Insets.new(5,10,5,5)
@@ -356,7 +370,7 @@ class BurpExtender
     constraints.anchor     = java.awt.GridBagConstraints::NORTH
     constraints.fill       = java.awt.GridBagConstraints::BOTH
     constraints.gridx      = 1
-    constraints.gridy      = 6
+    constraints.gridy      = 7
     constraints.gridwidth  = 4
     constraints.gridheight = 1
     constraints.insets     = java.awt.Insets.new(5,10,5,5)
@@ -367,7 +381,7 @@ class BurpExtender
     constraints.anchor  = java.awt.GridBagConstraints::WEST
     constraints.fill    = java.awt.GridBagConstraints::VERTICAL
     constraints.gridx   = 1
-    constraints.gridy   = 7
+    constraints.gridy   = 8
     constraints.insets  = java.awt.Insets.new(5,10,5,5)
     constraints.weightx = 0
     constraints.weighty = 0
@@ -435,7 +449,8 @@ class BurpExtender
 
     path = ''
     path << @field_path.text || '' if @radio_pro.selected
-    path << '/api/issues'
+    path << '/' unless path[-1,1] == '/'
+    path << 'api/issues'
 
     unless endpoint.length > 0 && token.length > 0
       javax.swing.JOptionPane.showMessageDialog(nil, "Please configure the extension using the #{META::TAB_CAPTION} tab.")
@@ -449,6 +464,11 @@ class BurpExtender
 
       request['Content-Type']      = 'application/json'
 
+      if endpoint =~ /\Ahttps/i
+        http.use_ssl     = true
+        http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @check_ignore_ssl_errors.selected
+      end
+
       if @radio_pro.selected
         request['Authorization']     = "Token token=\"#{token}\""
         request['Dradis-Project-Id'] = @field_project_id.text
@@ -461,12 +481,12 @@ class BurpExtender
 
       @stdout.print "Sending POST to #{endpoint}#{request.path}... "
       response        = http.request(request)
-      response_status = "#{response.code} #{response.message}."
+      response_status = "#{response.code} #{response.message}"
 
       @stdout.println response_status
-      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent [#{response_status}]")
+      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent [#{response_status}].")
     rescue Exception => e
-      @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}")
+      @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}.")
       @stderr.println e.backtrace
     end
   end
@@ -504,9 +524,11 @@ class BurpExtender
   def save_settings
     @callbacks.save_extension_setting 'edition', @radio_ce.selected ? 'ce' : 'pro'
     @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
+    @callbacks.save_extension_setting 'ignore_ssl_errors', @check_ignore_ssl_errors.selected ? 'true' : 'false'
     @callbacks.save_extension_setting 'path', @field_path.text
     @callbacks.save_extension_setting 'project_id', @field_project_id.text
     @callbacks.save_extension_setting 'token', @field_token.text
+
     @stdout.println 'Configuration saved.'
   end
 
@@ -546,12 +568,15 @@ class BurpExtender
   def restore_settings
     edition                = @callbacks.load_extension_setting('edition')
     @field_endpoint.text   = @callbacks.load_extension_setting('endpoint')
+    ignore_ssl_errors      = @callbacks.load_extension_setting('ignore_ssl_errors')
     @field_path.text       = @callbacks.load_extension_setting('path')
     @field_project_id.text = @callbacks.load_extension_setting('project_id')
     @field_token.text      = @callbacks.load_extension_setting('token')
 
     edition == 'ce' ? @radio_ce.selected = true : @radio_pro.selected = true
     toggle_edition()
+
+    @check_ignore_ssl_errors.selected = ignore_ssl_errors == 'true' ? true : false
 
     @stdout.println 'Configuration restored.'
   end
