@@ -57,15 +57,21 @@ java_import 'burp.ITab'
 class BurpExtender
   include HyperlinkListener, IBurpExtender, IContextMenuFactory, ITab
 
-  VERSION = '0.0.1'
+  module META
+    NAME        = 'Dradis Framework connector'
+    TAB_CAPTION = 'Dradis Framework'
+    VERSION     = '0.0.1'
+  end
 
 
   # ------------------------------------------------------------- IBurpExtender
   def registerExtenderCallbacks(callbacks)
+    name_with_version = "#{META::NAME} (v#{META::VERSION})"
+
     @callbacks = callbacks
 
     # set our extension name
-    callbacks.setExtensionName('Dradis Framework connector')
+    callbacks.setExtensionName(name_with_version)
 
     # obtain a reference to the helpers
     @helpers = callbacks.getHelpers()
@@ -74,7 +80,7 @@ class BurpExtender
     @stdout = java.io.PrintWriter.new(callbacks.getStdout(), true)
     @stderr = java.io.PrintWriter.new(callbacks.getStderr(), true)
 
-    @stdout.println "Loading Dradis Framework extension (v#{VERSION})..."
+    @stdout.println "Loading #{name_with_version}..."
 
     # Register a factory for custom context menu items
     callbacks.registerContextMenuFactory(self)
@@ -106,7 +112,7 @@ class BurpExtender
 
   # ---------------------------------------------------------------------- ITab
   def getTabCaption
-    'Dradis Framework'
+    META::TAB_CAPTION
   end
 
   def getUiComponent
@@ -398,12 +404,22 @@ class BurpExtender
     issue_text.sub!(/%issue\.name%/, issue.issue_name)
     issue_text.sub!(/%issue\.confidence%/, issue.confidence)
     issue_text.sub!(/%issue\.severity%/, issue.severity)
-    issue_text.sub!(/%issue\.background%/, issue.issue_background)
-    issue_text.sub!(/%issue\.remediation_background%/, issue.remediation_background)
-    issue_text.sub!(/%issue\.detail%/, issue.issue_detail)
-    issue_text.sub!(/%issue\.remediation_detail%/, issue.remediation_detail)
+    issue_text.sub!(/%issue\.background%/, clean_markup(issue.issue_background))
+    issue_text.sub!(/%issue\.remediation_background%/, clean_markup(issue.remediation_background || 'n/a'))
+    issue_text.sub!(/%issue\.detail%/, clean_markup(issue.issue_detail || 'n/a'))
+    issue_text.sub!(/%issue\.remediation_detail%/, clean_markup(issue.remediation_detail || 'n/a'))
 
     { issue: { text: issue_text } }.to_json
+  end
+
+  # Internal: cleans the Burp IScanIssue fields of HTML markup.
+  #
+  # field - The String containing <p> and </p> tags.
+  #
+  # Returns field where <p> and </p> have been stripped.
+  #
+  def clean_markup(field='')
+    field.gsub(/<p>/i, '').gsub(/<\/p>/i, "\r\n\r\n")
   end
 
   # Internal: get an Issue and send it to Dradis using the HTTP API.
@@ -413,13 +429,18 @@ class BurpExtender
   # Returns nothing.
   #
   def create_dradis_issue(issue)
-    endpoint = @field_endpoint.text
-    token    = @field_token.text
+    endpoint = @field_endpoint.text || ''
+    token    = @field_token.text    || ''
     payload  = build_json_payload(issue)
 
     path = ''
-    path << @field_path.text if @radio_pro.selected
+    path << @field_path.text || '' if @radio_pro.selected
     path << '/api/issues'
+
+    unless endpoint.length > 0 && token.length > 0
+      javax.swing.JOptionPane.showMessageDialog(nil, "Please configure the extension using the #{META::TAB_CAPTION} tab.")
+      return
+    end
 
     begin
       uri      = URI.parse(endpoint)
@@ -439,8 +460,11 @@ class BurpExtender
 
 
       @stdout.print "Sending POST to #{endpoint}#{request.path}... "
-      response = http.request(request)
-      @stdout.println "#{response.code} #{response.message}."
+      response        = http.request(request)
+      response_status = "#{response.code} #{response.message}."
+
+      @stdout.println response_status
+      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent [#{response_status}]")
     rescue Exception => e
       @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}")
       @stderr.println e.backtrace
