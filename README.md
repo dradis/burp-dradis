@@ -2,6 +2,8 @@
 
 This extension allows users to send issues from Burp's Scanner directly into their Dradis project using the HTTP API.
 
+The add-on requires [Dradis CE](https://dradisframework.org/) > 3.0, or [Dradis Pro](https://dradisframework.com/pro/).
+
 
 ## Dependencies
 
@@ -36,3 +38,8 @@ List of [contributors](https://github.com/dradis/burp-dradis/graphs/contributors
 ## License
 
 The Dradis Framework extension for Burp is released under [GNU General Public License version 2.0](http://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+
+
+## Feature requests and bugs
+
+Please use the [Dradis Framework issue tracker](https://github.com/dradis/dradis-ce/issues) for add-on improvements and bug reports.
