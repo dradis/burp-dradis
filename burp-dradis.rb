@@ -182,8 +182,6 @@ class BurpExtender
     label_token  = javax.swing.JLabel.new('API token:')
     label_token.setLabelFor(@field_token)
 
-    @check_ignore_ssl_errors = javax.swing.JCheckBox.new('Ignore SSL certificate errors.')
-
     @field_project_id = javax.swing.JTextField.new()
     @field_project_id.enabled = false
 
@@ -324,18 +322,6 @@ class BurpExtender
     constraints.weightx    = 0
     constraints.weighty    = 0
     panel.add(@field_token, constraints)
-
-    constraints.anchor     = java.awt.GridBagConstraints::NORTH
-    constraints.fill       = java.awt.GridBagConstraints::BOTH
-    constraints.gridx      = 1
-    constraints.gridy      = 5
-    constraints.gridwidth  = 4
-    constraints.gridheight = 1
-    constraints.insets     = java.awt.Insets.new(5,10,5,5)
-    constraints.weightx    = 0
-    constraints.weighty    = 0
-    panel.add(@check_ignore_ssl_errors, constraints)
-
 
     constraints.anchor     = java.awt.GridBagConstraints::EAST
     constraints.fill       = java.awt.GridBagConstraints::VERTICAL
@@ -547,7 +533,6 @@ class BurpExtender
   def save_settings
     @callbacks.save_extension_setting 'edition', @radio_ce.selected ? 'ce' : 'pro'
     @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
-    @callbacks.save_extension_setting 'ignore_ssl_errors', @check_ignore_ssl_errors.selected ? 'true' : 'false'
     @callbacks.save_extension_setting 'path', @field_path.text
     @callbacks.save_extension_setting 'project_id', @field_project_id.text
     @callbacks.save_extension_setting 'token', @field_token.text
@@ -598,8 +583,6 @@ class BurpExtender
 
     edition == 'ce' ? @radio_ce.selected = true : @radio_pro.selected = true
     toggle_edition()
-
-    @check_ignore_ssl_errors.selected = ignore_ssl_errors == 'true' ? true : false
 
     @stdout.println 'Configuration restored.'
   end
