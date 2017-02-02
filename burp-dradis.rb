@@ -49,6 +49,7 @@ java_import 'javax.swing.SwingConstants'
 java_import 'javax.swing.event.HyperlinkEvent'
 java_import 'javax.swing.event.HyperlinkListener'
 java_import 'java.net.URL'
+java_import 'java.util.Base64'
 
 java_import 'burp.IBurpExtender'
 java_import 'burp.IContextMenuFactory'
@@ -448,18 +449,6 @@ class BurpExtender
     endpoint = @field_endpoint.text || ''
     token    = @field_token.text    || ''
     payload  = build_json_payload(issue)
-    port = 80
-    use_ssl = false
-
-    path = endpoint.clone
-    path << @field_path.text || '' if @radio_pro.selected
-    path << '/' unless path[-1,1] == '/'
-    path << 'api/issues'
-
-    if endpoint =~ /\Ahttps/i
-      port = 443
-      use_ssl = true
-    end
 
     unless endpoint.length > 0 && token.length > 0
       javax.swing.JOptionPane.showMessageDialog(nil, "Please configure the extension using the #{META::TAB_CAPTION} tab.")
@@ -467,35 +456,62 @@ class BurpExtender
     end
 
     begin
-      t = java.lang.Thread.new( Proc.new {
-        host = endpoint.sub(/^https?\:\/\//, '')
-        url = java.net.URL.new(path)
-
-        # Build the initial request
-        report_req = @helpers.build_http_request(url)
-        report_req = @helpers.toggleRequestMethod report_req
-
-        # Edit the request headers
-        request_str = String.from_java_bytes(report_req)
-        request_str.sub!(
-          'x-www-form-urlencoded',
-          "json\n" \
-          "Authorization: Token token=\"#{token}\"\n" \
-          "Dradis-Project-Id: #{@field_project_id.text}"
-        )
-        request_str.sub! 'Content-Length: 0', "Content-Length: #{payload.length}"
-        request_str << payload
-        report_req = request_str.to_java_bytes
-
-        response = @callbacks.make_http_request(host, port, use_ssl, report_req)
-        javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent.")
-      })
-
+      t = build_http_request_thread(endpoint, token, payload)
       t.start
     rescue Exception => e
       @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}.")
       @stderr.println e.backtrace
     end
+  end
+
+  # Internal: builds a Thread object that makes an HTTP request using the Burp API
+  #
+  # endpoint - The configured Dradis endpoint
+  # token - The configured Dradis API token
+  # payload - The HTTP request body to be sent
+  #
+  # Returns a Thread object
+  #
+  def build_http_request_thread endpoint, token, payload
+    port, use_ssl=
+      if endpoint =~ /\Ahttps/i
+        [443, true]
+      else
+        [80, false]
+      end
+
+    path = endpoint.clone
+    path << @field_path.text || '' if @radio_pro.selected
+    path << '/' unless path[-1,1] == '/'
+    path << 'api/issues'
+
+    auth_header =
+      if @radio_pro.selected
+        "Authorization: Token token=\"#{token}\"\n" \
+        "Dradis-Project-Id: #{@field_project_id.text}"
+      else
+        basic_token = Base64.getEncoder().encodeToString("BurpExtender:#{token}".to_java_bytes)
+        "Authorization: Basic #{basic_token}"
+      end
+
+    return java.lang.Thread.new(Proc.new {
+      host = endpoint.sub(/^https?\:\/\//, '')
+      url = java.net.URL.new(path)
+
+      # Build the initial request
+      report_req = @helpers.build_http_request(url)
+      report_req = @helpers.toggleRequestMethod(report_req)
+
+      # Edit the request headers
+      request_str = String.from_java_bytes(report_req)
+      request_str.sub!('x-www-form-urlencoded', "json\n#{auth_header}")
+      request_str.sub! 'Content-Length: 0', "Content-Length: #{payload.length}"
+      request_str << payload
+      report_req = request_str.to_java_bytes
+
+      response = @callbacks.make_http_request(host, port, use_ssl, report_req)
+      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent")
+    })
   end
 
   # Internal: implementation of the HyperlinkListener interface that detects
