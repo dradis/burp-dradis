@@ -65,7 +65,7 @@ class BurpExtender
   module META
     NAME        = 'Dradis Framework connector'
     TAB_CAPTION = 'Dradis Framework'
-    VERSION     = '0.0.2'
+    VERSION     = '0.0.3'
   end
 
 
