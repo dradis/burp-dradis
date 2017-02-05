@@ -1,0 +1,10 @@
+Uuid: c1be8787ebdd45f58c091f6ae30f1af2
+ExtensionType: 3
+Name: Dradis Framework
+ScreenVersion: 0.0.2
+SerialVersion: 2
+MinPlatformVersion: 0
+ProOnly: True
+Author: Dradis Core team
+ShortDescription: Send Scanner issues to Dradis collaboration and reporting framework.
+EntryPoint: burp-dradis.rb
