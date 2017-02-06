@@ -471,7 +471,7 @@ class BurpExtender
     path << '/' unless path[-1,1] == '/'
     path << 'api/issues'
 
-    auth_header =
+    dradis_headers =
       if @radio_pro.selected
         "Authorization: Token token=\"#{token}\"\n" \
         "Dradis-Project-Id: #{@field_project_id.text}"
@@ -485,17 +485,18 @@ class BurpExtender
       url = java.net.URL.new(path)
 
       # Build the initial request
-      report_req = @helpers.build_http_request(url)
-      report_req = @helpers.toggleRequestMethod(report_req)
+      req_as_bytes = @helpers.toggleRequestMethod(@helpers.build_http_request(url))
+      req_as_string = String.from_java_bytes(req_as_bytes).strip
 
       # Edit the request headers
-      request_str = String.from_java_bytes(report_req)
-      request_str.sub!('x-www-form-urlencoded', "json\n#{auth_header}")
-      request_str.sub! 'Content-Length: 0', "Content-Length: #{payload.length}"
-      request_str << payload
-      report_req = request_str.to_java_bytes
+      req_as_string.sub!('x-www-form-urlencoded', "json")
+      req_as_string.sub!('Content-Length: 0', "Content-Length: #{payload.length}\n")
+      req_as_string << "#{dradis_headers}\n\n"
+      req_as_string << payload
+      @stdout.println req_as_string
 
-      response = @callbacks.make_http_request(host, port, use_ssl, report_req)
+      response = @callbacks.make_http_request(host, port, use_ssl, req_as_string.to_java_bytes)
+      @stdout.println(response)
       javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent")
     })
   end
