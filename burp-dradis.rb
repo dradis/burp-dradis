@@ -48,14 +48,11 @@ java_import 'javax.swing.JSeparator'
 java_import 'javax.swing.SwingConstants'
 java_import 'javax.swing.event.HyperlinkEvent'
 java_import 'javax.swing.event.HyperlinkListener'
-java_import 'java.net.URL'
-java_import 'java.util.Base64'
 
 java_import 'burp.IBurpExtender'
 java_import 'burp.IContextMenuFactory'
 java_import 'burp.IContextMenuInvocation'
 java_import 'burp.IExtensionHelpers'
-java_import 'burp.IParameter'
 java_import 'burp.ITab'
 
 
@@ -386,6 +383,40 @@ class BurpExtender
     container
   end
 
+  # Internal: builds a Thread object that makes an HTTP request using the Burp API
+  #
+  # endpoint - The configured Dradis endpoint
+  # token - The configured Dradis API token
+  # payload - The HTTP request body to be sent
+  #
+  # Returns a Thread object
+  #
+  def build_http_request(uri, token, payload)
+    host = uri.host
+    path = uri.path
+
+    path << @field_path.text || '' if @radio_pro.selected
+    path << '/' unless path[-1,1] == '/'
+    path << 'api/issues'
+
+    request = []
+    request << "POST #{path} HTTP/1.1"
+    request << "Host: #{host}"
+    request << "Content-Type: application/json"
+    request << "Content-Length: #{payload.bytesize}"
+
+    if @radio_pro.selected
+      request << "Authorization: Token token=\"#{token}\""
+      request << "Dradis-Project-Id: #{@field_project_id.text}"
+    else
+      basic = ["BurpExtender:#{token}"].pack('m').delete("\r\n")
+      request << "Authorization: Basic #{basic}"
+    end
+
+    request << ""
+    request << payload
+    request.join("\r\n")
+  end
 
   # Internal: this method creates a Hash we can use in the HTTP POST request to
   # create a Dradis Issue from an instance of Burp's IScanIssue.
@@ -441,64 +472,15 @@ class BurpExtender
       return
     end
 
+    uri     = URI.parse(endpoint)
+    request = build_http_request(uri, token, payload)
+
     begin
-      t = build_http_request_thread(endpoint, token, payload)
-      t.start
+      send_http_request(uri, request)
     rescue Exception => e
       @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}.")
       @stderr.println e.backtrace
     end
-  end
-
-  # Internal: builds a Thread object that makes an HTTP request using the Burp API
-  #
-  # endpoint - The configured Dradis endpoint
-  # token - The configured Dradis API token
-  # payload - The HTTP request body to be sent
-  #
-  # Returns a Thread object
-  #
-  def build_http_request_thread endpoint, token, payload
-    port, use_ssl=
-      if endpoint =~ /\Ahttps/i
-        [443, true]
-      else
-        [80, false]
-      end
-
-    path = endpoint.clone
-    path << @field_path.text || '' if @radio_pro.selected
-    path << '/' unless path[-1,1] == '/'
-    path << 'api/issues'
-
-    dradis_headers =
-      if @radio_pro.selected
-        "Authorization: Token token=\"#{token}\"\n" \
-        "Dradis-Project-Id: #{@field_project_id.text}"
-      else
-        basic_token = Base64.getEncoder().encodeToString("BurpExtender:#{token}".to_java_bytes)
-        "Authorization: Basic #{basic_token}"
-      end
-
-    return java.lang.Thread.new(Proc.new {
-      host = endpoint.sub(/^https?\:\/\//, '')
-      url = java.net.URL.new(path)
-
-      # Build the initial request
-      req_as_bytes = @helpers.toggleRequestMethod(@helpers.build_http_request(url))
-      req_as_string = String.from_java_bytes(req_as_bytes).strip
-
-      # Edit the request headers
-      req_as_string.sub!('x-www-form-urlencoded', "json")
-      req_as_string.sub!('Content-Length: 0', "Content-Length: #{payload.length}\n")
-      req_as_string << "#{dradis_headers}\n\n"
-      req_as_string << payload
-      @stdout.println req_as_string
-
-      response = @callbacks.make_http_request(host, port, use_ssl, req_as_string.to_java_bytes)
-      @stdout.println(response)
-      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent")
-    })
   end
 
   # Internal: implementation of the HyperlinkListener interface that detects
@@ -569,6 +551,31 @@ class BurpExtender
       )
       create_dradis_issue(issue)
     end
+  end
+
+
+  # Internal: Open a Java thread and send the request through the wire using
+  # Burp's standard API for http messaging.
+  #
+  # request - The HTTP request message we want to send to the server.
+  #
+  # Returns nothing.
+  #
+  def send_http_request(uri, request)
+    host    = uri.host
+    port    = uri.port
+    use_ssl = uri.scheme == 'https'
+
+    thread = java.lang.Thread.new(
+      Proc.new {
+        @stdout.println request
+
+        response = @callbacks.make_http_request(host, port, use_ssl, request.to_java_bytes)
+        @stdout.println(response)
+        javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent")
+      }
+    )
+    thread.start
   end
 
   # Internal: use Burp's facilities to restore extension settings.
