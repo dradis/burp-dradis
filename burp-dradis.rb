@@ -383,13 +383,14 @@ class BurpExtender
     container
   end
 
-  # Internal: builds a Thread object that makes an HTTP request using the Burp API
+  # Internal: builds a an HTTP POST request with headers containing
+  # authentication and payload.
   #
-  # endpoint - The configured Dradis endpoint
-  # token - The configured Dradis API token
+  # uri     - The URI that we'll use to build the request's Host and path.
+  # token   - The configured Dradis API token (Pro) or shared password (CE).
   # payload - The HTTP request body to be sent
   #
-  # Returns a Thread object
+  # Returns a string containing a valid HTTP POST require request.
   #
   def build_http_request(uri, token, payload)
     host = uri.host
@@ -555,8 +556,10 @@ class BurpExtender
 
 
   # Internal: Open a Java thread and send the request through the wire using
-  # Burp's standard API for http messaging.
+  # Burp's standard API for http messaging. We need a thread because Burp
+  # doesn't like in-line requests that could freeze the UI.
   #
+  # uri     - An URI object so we know where to send the request to
   # request - The HTTP request message we want to send to the server.
   #
   # Returns nothing.
