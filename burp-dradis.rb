@@ -50,9 +50,9 @@ java_import 'javax.swing.event.HyperlinkEvent'
 java_import 'javax.swing.event.HyperlinkListener'
 
 java_import 'burp.IBurpExtender'
-java_import 'burp.IExtensionHelpers'
 java_import 'burp.IContextMenuFactory'
 java_import 'burp.IContextMenuInvocation'
+java_import 'burp.IExtensionHelpers'
 java_import 'burp.ITab'
 
 
@@ -62,7 +62,7 @@ class BurpExtender
   module META
     NAME        = 'Dradis Framework connector'
     TAB_CAPTION = 'Dradis Framework'
-    VERSION     = '0.0.2'
+    VERSION     = '0.0.3'
   end
 
 
@@ -178,8 +178,6 @@ class BurpExtender
     @field_token = javax.swing.JTextField.new()
     label_token  = javax.swing.JLabel.new('API token:')
     label_token.setLabelFor(@field_token)
-
-    @check_ignore_ssl_errors = javax.swing.JCheckBox.new('Ignore SSL certificate errors.')
 
     @field_project_id = javax.swing.JTextField.new()
     @field_project_id.enabled = false
@@ -322,18 +320,6 @@ class BurpExtender
     constraints.weighty    = 0
     panel.add(@field_token, constraints)
 
-    constraints.anchor     = java.awt.GridBagConstraints::NORTH
-    constraints.fill       = java.awt.GridBagConstraints::BOTH
-    constraints.gridx      = 1
-    constraints.gridy      = 5
-    constraints.gridwidth  = 4
-    constraints.gridheight = 1
-    constraints.insets     = java.awt.Insets.new(5,10,5,5)
-    constraints.weightx    = 0
-    constraints.weighty    = 0
-    panel.add(@check_ignore_ssl_errors, constraints)
-
-
     constraints.anchor     = java.awt.GridBagConstraints::EAST
     constraints.fill       = java.awt.GridBagConstraints::VERTICAL
     constraints.gridx      = 0
@@ -397,6 +383,41 @@ class BurpExtender
     container
   end
 
+  # Internal: builds a an HTTP POST request with headers containing
+  # authentication and payload.
+  #
+  # uri     - The URI that we'll use to build the request's Host and path.
+  # token   - The configured Dradis API token (Pro) or shared password (CE).
+  # payload - The HTTP request body to be sent
+  #
+  # Returns a string containing a valid HTTP POST require request.
+  #
+  def build_http_request(uri, token, payload)
+    host = uri.host
+    path = uri.path
+
+    path << @field_path.text || '' if @radio_pro.selected
+    path << '/' unless path[-1,1] == '/'
+    path << 'api/issues'
+
+    request = []
+    request << "POST #{path} HTTP/1.1"
+    request << "Host: #{host}"
+    request << "Content-Type: application/json"
+    request << "Content-Length: #{payload.bytesize}"
+
+    if @radio_pro.selected
+      request << "Authorization: Token token=\"#{token}\""
+      request << "Dradis-Project-Id: #{@field_project_id.text}"
+    else
+      basic = ["BurpExtender:#{token}"].pack('m').delete("\r\n")
+      request << "Authorization: Basic #{basic}"
+    end
+
+    request << ""
+    request << payload
+    request.join("\r\n")
+  end
 
   # Internal: this method creates a Hash we can use in the HTTP POST request to
   # create a Dradis Issue from an instance of Burp's IScanIssue.
@@ -447,44 +468,16 @@ class BurpExtender
     token    = @field_token.text    || ''
     payload  = build_json_payload(issue)
 
-    path = ''
-    path << @field_path.text || '' if @radio_pro.selected
-    path << '/' unless path[-1,1] == '/'
-    path << 'api/issues'
-
     unless endpoint.length > 0 && token.length > 0
       javax.swing.JOptionPane.showMessageDialog(nil, "Please configure the extension using the #{META::TAB_CAPTION} tab.")
       return
     end
 
+    uri     = URI.parse(endpoint)
+    request = build_http_request(uri, token, payload)
+
     begin
-      uri      = URI.parse(endpoint)
-      http     = Net::HTTP.new(uri.host, uri.port)
-      request  = Net::HTTP::Post.new(path)
-
-      request['Content-Type']      = 'application/json'
-
-      if endpoint =~ /\Ahttps/i
-        http.use_ssl     = true
-        http.verify_mode = OpenSSL::SSL::VERIFY_NONE if @check_ignore_ssl_errors.selected
-      end
-
-      if @radio_pro.selected
-        request['Authorization']     = "Token token=\"#{token}\""
-        request['Dradis-Project-Id'] = @field_project_id.text
-      else
-        request.basic_auth('BurpExtender', token)
-      end
-
-      request.body = payload
-
-
-      @stdout.print "Sending POST to #{endpoint}#{request.path}... "
-      response        = http.request(request)
-      response_status = "#{response.code} #{response.message}"
-
-      @stdout.println response_status
-      javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent [#{response_status}].")
+      send_http_request(uri, request)
     rescue Exception => e
       @callbacks.issue_alert("There was an error connecting to Dradis: #{e.message}.")
       @stderr.println e.backtrace
@@ -524,7 +517,6 @@ class BurpExtender
   def save_settings
     @callbacks.save_extension_setting 'edition', @radio_ce.selected ? 'ce' : 'pro'
     @callbacks.save_extension_setting 'endpoint', @field_endpoint.text
-    @callbacks.save_extension_setting 'ignore_ssl_errors', @check_ignore_ssl_errors.selected ? 'true' : 'false'
     @callbacks.save_extension_setting 'path', @field_path.text
     @callbacks.save_extension_setting 'project_id', @field_project_id.text
     @callbacks.save_extension_setting 'token', @field_token.text
@@ -562,6 +554,33 @@ class BurpExtender
     end
   end
 
+
+  # Internal: Open a Java thread and send the request through the wire using
+  # Burp's standard API for http messaging. We need a thread because Burp
+  # doesn't like in-line requests that could freeze the UI.
+  #
+  # uri     - An URI object so we know where to send the request to
+  # request - The HTTP request message we want to send to the server.
+  #
+  # Returns nothing.
+  #
+  def send_http_request(uri, request)
+    host    = uri.host
+    port    = uri.port
+    use_ssl = uri.scheme == 'https'
+
+    thread = java.lang.Thread.new(
+      Proc.new {
+        @stdout.println request
+
+        response = @callbacks.make_http_request(host, port, use_ssl, request.to_java_bytes)
+        @stdout.println(response)
+        javax.swing.JOptionPane.showMessageDialog(nil, "Issue sent")
+      }
+    )
+    thread.start
+  end
+
   # Internal: use Burp's facilities to restore extension settings.
   #
   # Returns nothing.
@@ -575,8 +594,6 @@ class BurpExtender
 
     edition == 'ce' ? @radio_ce.selected = true : @radio_pro.selected = true
     toggle_edition()
-
-    @check_ignore_ssl_errors.selected = ignore_ssl_errors == 'true' ? true : false
 
     @stdout.println 'Configuration restored.'
   end
