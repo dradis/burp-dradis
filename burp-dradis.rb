@@ -62,7 +62,7 @@ class BurpExtender
   module META
     NAME        = 'Dradis Framework connector'
     TAB_CAPTION = 'Dradis Framework'
-    VERSION     = '0.0.3'
+    VERSION     = '0.0.4'
   end
 
 
@@ -403,6 +403,7 @@ class BurpExtender
     request = []
     request << "POST #{path} HTTP/1.1"
     request << "Host: #{host}"
+    request << 'Accept: */*'
     request << "Content-Type: application/json"
     request << "Content-Length: #{payload.bytesize}"
 
