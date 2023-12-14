@@ -30,7 +30,7 @@ Extender > Extensions > Add:
 
 ## Contributing
 
-Please see CONTRIBUTING.md for details.
+Please see [CONTRIBUTING.md](https://github.com/dradis/dradis-ce/blob/develop/CONTRIBUTING.md) for details.
 
 List of [contributors](https://github.com/dradis/burp-dradis/graphs/contributors).
 
