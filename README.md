@@ -4,6 +4,8 @@ This extension allows users to send issues from Burp's Scanner directly into the
 
 The add-on requires [Dradis CE](https://dradis.com/ce/) > 3.0, or [Dradis Pro](https://dradis.com/).
 
+**Note: when making any changes to this repository, also submit a PR to the
+official clone https://github.com/PortSwigger/dradis-framework**
 
 ## Dependencies
 
