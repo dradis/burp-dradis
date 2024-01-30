@@ -2,8 +2,8 @@ Uuid: c1be8787ebdd45f58c091f6ae30f1af2
 ExtensionType: 3
 Name: Dradis Framework
 RepoName: dradis-framework
-ScreenVersion: 0.0.3
-SerialVersion: 3
+ScreenVersion: 0.0.4
+SerialVersion: 4
 MinPlatformVersion: 0
 ProOnly: True
 Author: Dradis Core team
