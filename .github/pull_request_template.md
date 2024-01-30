@@ -7,6 +7,9 @@ request... were there any bugs you had fixed? If so, mention them. If
 these bugs have open GitHub issues, be sure to tag them here as well,
 to keep the conversation linked together.
 
+**Note: when making any changes to this repository, also submit a PR to the
+official clone https://github.com/PortSwigger/dradis-framework**
+
 
 ### Testing Steps
 
